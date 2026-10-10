@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "Music Elite",
+    "slug": "music-elite",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B0C10"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.implantarh.musicelite"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0B0C10"
+      },
+      "package": "com.implantarh.musicelite"
+    },
+    "plugins": [
+      "expo-status-bar"
+    ]
+  }
+}
