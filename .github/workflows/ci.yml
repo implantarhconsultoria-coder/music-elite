@@ -18,7 +18,13 @@ jobs:
           node-version: '22'
 
       - name: Install dependencies
-        run: npm install --legacy-peer-deps
+        run: npm ci
+
+      - name: Expo install check
+        run: npx expo install --check
+
+      - name: Expo Doctor
+        run: npx expo-doctor
 
       - name: TypeScript check
         run: npm run typecheck
