@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -21,28 +21,35 @@ export default function DiagnosisScreen({ navigation, route }: Props) {
   const [answered, setAnswered] = useState<AnswerRecord[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [loading, setLoading] = useState(false);
-  const [difficulty, setDifficulty] = useState(getStartingDifficulty(experience));
+  const [difficulty, setDifficulty] = useState(() => getStartingDifficulty(experience));
   const [competencyProgress, setCompetencyProgress] = useState<Record<string, { correct: number; total: number }>>({});
+  const initialized = useRef(false);
 
   useEffect(() => {
+    if (initialized.current) return;
+    initialized.current = true;
     const first = selectNextQuestion(instrument, [], null, difficulty, {});
     setCurrentQuestion(first);
-  }, [instrument, difficulty]);
+  }, [instrument]);
 
-  const handleAnswer = async (correct: boolean) => {
-    if (!currentQuestion) return;
+  const handleSelectOption = async (optionIndex: number) => {
+    if (!currentQuestion || loading) return;
 
+    const correct = optionIndex === currentQuestion.correctIndex;
     const record: AnswerRecord = {
       questionId: currentQuestion.id,
       correct,
       competency: currentQuestion.competency,
       difficulty: currentQuestion.difficulty,
     };
+
     const newAnswered = [...answered, record];
     setAnswered(newAnswered);
 
     const newProgress = { ...competencyProgress };
-    if (!newProgress[currentQuestion.competency]) newProgress[currentQuestion.competency] = { correct: 0, total: 0 };
+    if (!newProgress[currentQuestion.competency]) {
+      newProgress[currentQuestion.competency] = { correct: 0, total: 0 };
+    }
     newProgress[currentQuestion.competency].total += 1;
     if (correct) newProgress[currentQuestion.competency].correct += 1;
     setCompetencyProgress(newProgress);
@@ -51,7 +58,7 @@ export default function DiagnosisScreen({ navigation, route }: Props) {
     setDifficulty(newDiff);
 
     if (newAnswered.length >= 7) {
-      finish(newAnswered);
+      await finish(newAnswered);
       return;
     }
 
@@ -64,7 +71,7 @@ export default function DiagnosisScreen({ navigation, route }: Props) {
     );
 
     if (!next) {
-      finish(newAnswered);
+      await finish(newAnswered);
     } else {
       setCurrentQuestion(next);
     }
@@ -90,8 +97,9 @@ export default function DiagnosisScreen({ navigation, route }: Props) {
         scores: result.scores,
         strength: result.strength,
         weakness: result.weakness,
+        generalIndex: result.generalIndex,
       });
-    }, 1000);
+    }, 1200);
   };
 
   if (loading) {
@@ -114,23 +122,23 @@ export default function DiagnosisScreen({ navigation, route }: Props) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>DIAGNÓSTICO ADAPTATIVO</Text>
-        <Text style={styles.progress}>{answered.length + 1} / ~7</Text>
+        <Text style={styles.title}>DIAGNÓSTICO</Text>
+        <Text style={styles.progress}>{answered.length + 1} / 7</Text>
       </View>
       <View style={styles.body}>
-        <Text style={styles.competency}>{currentQuestion.competency} · Nível {currentQuestion.difficulty}</Text>
+        <Text style={styles.competency}>{currentQuestion.competency} · Dif. {currentQuestion.difficulty}</Text>
         <Text style={styles.question}>{currentQuestion.text}</Text>
-        <View style={styles.actions}>
-          <TouchableOpacity style={styles.answerBtn} onPress={() => handleAnswer(true)}>
-            <LinearGradient colors={['#00D4FF', '#6B46FF']} style={styles.answerInner}>
-              <Text style={styles.answerText}>Sim / Consigo</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.answerBtn} onPress={() => handleAnswer(false)}>
-            <View style={[styles.answerInner, { backgroundColor: colors.bgCard }]}>
-              <Text style={styles.answerText}>Não / Ainda não</Text>
-            </View>
-          </TouchableOpacity>
+        <View style={styles.options}>
+          {currentQuestion.options.map((opt, idx) => (
+            <TouchableOpacity
+              key={idx}
+              style={styles.optionBtn}
+              onPress={() => handleSelectOption(idx)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.optionText}>{opt}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
       </View>
     </View>
@@ -139,16 +147,21 @@ export default function DiagnosisScreen({ navigation, route }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg, paddingTop: 50 },
-  header: { paddingHorizontal: 20, marginBottom: 24 },
+  header: { paddingHorizontal: 20, marginBottom: 16 },
   title: { color: '#fff', fontSize: 14, letterSpacing: 1, fontWeight: '600' },
   progress: { color: colors.textSecondary, marginTop: 4 },
-  body: { flex: 1, padding: 20, justifyContent: 'center' },
-  competency: { color: colors.accentBlue, fontSize: 14, marginBottom: 12, fontWeight: '600' },
-  question: { color: '#fff', fontSize: 22, fontWeight: '600', lineHeight: 30, marginBottom: 40 },
-  actions: { gap: 16 },
-  answerBtn: { borderRadius: 16, overflow: 'hidden' },
-  answerInner: { paddingVertical: 18, alignItems: 'center' },
-  answerText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  body: { flex: 1, padding: 20 },
+  competency: { color: colors.accentBlue, fontSize: 13, marginBottom: 12, fontWeight: '600' },
+  question: { color: '#fff', fontSize: 20, fontWeight: '600', lineHeight: 28, marginBottom: 28 },
+  options: { gap: 12 },
+  optionBtn: {
+    backgroundColor: colors.bgCard,
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  optionText: { color: '#fff', fontSize: 15 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bg },
   loadingText: { color: colors.textSecondary, marginTop: 16 },
 });
