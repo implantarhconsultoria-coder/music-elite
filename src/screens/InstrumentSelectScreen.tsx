@@ -11,11 +11,9 @@ const INSTRUMENTS = [
   { id: 'violao', name: 'Violão', emoji: '🎸' },
   { id: 'guitarra', name: 'Guitarra', emoji: '🎸' },
   { id: 'teclado', name: 'Teclado', emoji: '🎹' },
-  { id: 'baixo', name: 'Baixo', emoji: '🎸' },
   { id: 'cavaquinho', name: 'Cavaquinho', emoji: '🪕' },
+  { id: 'baixo', name: 'Baixo', emoji: '🎸' },
   { id: 'canto', name: 'Canto', emoji: '🎤' },
-  { id: 'bateria', name: 'Bateria', emoji: '🥁' },
-  { id: 'mais', name: 'Mais', emoji: '➕' },
 ];
 
 const { width } = Dimensions.get('window');
@@ -25,7 +23,9 @@ export default function InstrumentSelectScreen({ navigation }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
 
   const onContinue = () => {
-    if (selected) navigation.navigate('ExperienceAssessment', { instrument: selected });
+    if (selected) {
+      navigation.navigate('ExperienceAssessment', { instrument: selected });
+    }
   };
 
   return (
@@ -42,7 +42,11 @@ export default function InstrumentSelectScreen({ navigation }: Props) {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.grid}
         renderItem={({ item }) => (
-          <TouchableOpacity style={[styles.card, selected === item.name && styles.cardSelected]} onPress={() => setSelected(item.name)} activeOpacity={0.8}>
+          <TouchableOpacity
+            style={[styles.card, selected === item.name && styles.cardSelected]}
+            onPress={() => setSelected(item.name)}
+            activeOpacity={0.8}
+          >
             <Text style={styles.emoji}>{item.emoji}</Text>
             <Text style={styles.cardText}>{item.name}</Text>
           </TouchableOpacity>

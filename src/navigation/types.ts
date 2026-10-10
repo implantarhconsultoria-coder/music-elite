@@ -5,7 +5,7 @@ export type RootStackParamList = {
   InstrumentSelect: undefined;
   ExperienceAssessment: { instrument: string };
   Diagnosis: { instrument: string; experience: string };
-  DiagnosisResult: { instrument: string; level: string; scores: Record<string, number> };
+  DiagnosisResult: { instrument: string; level: string; scores: Record<string, number>; strength?: string; weakness?: string; generalIndex?: number };
   Home: undefined;
 };
 
