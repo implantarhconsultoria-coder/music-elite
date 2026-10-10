@@ -5,87 +5,134 @@ import { RootStackParamList } from '../navigation/types';
 import { colors } from '../theme/colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { selectNextQuestion, calculateResult, getStartingDifficulty, Question } from '../utils/diagnosisEngine';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Diagnosis'>;
 
-const QUESTIONS = [
-  { id: 'q1', competency: 'Acordes', text: 'Você reconhece e forma acordes maiores e menores básicos?', difficulty: 1 },
-  { id: 'q2', competency: 'Ritmo', text: 'Consegue manter um ritmo estável em 4/4 com metrônomo?', difficulty: 1 },
-  { id: 'q3', competency: 'Percepção', text: 'Identifica intervalos simples de ouvido?', difficulty: 2 },
-  { id: 'q4', competency: 'Teoria', text: 'Entende campo harmônico da tonalidade de Dó?', difficulty: 2 },
-  { id: 'q5', competency: 'Técnica', text: 'Troca de acordes com fluidez em andamento moderado?', difficulty: 3 },
-];
+interface AnswerRecord {
+  questionId: string;
+  correct: boolean;
+  competency: string;
+  difficulty: number;
+}
 
 export default function DiagnosisScreen({ navigation, route }: Props) {
   const { instrument, experience } = route.params;
-  const [current, setCurrent] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, boolean>>({});
+  const [answered, setAnswered] = useState<AnswerRecord[]>([]);
+  const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [loading, setLoading] = useState(false);
-  const [difficultyOffset, setDifficultyOffset] = useState(0);
+  const [difficulty, setDifficulty] = useState(getStartingDifficulty(experience));
+  const [competencyProgress, setCompetencyProgress] = useState<Record<string, { correct: number; total: number }>>({});
 
   useEffect(() => {
-    if (experience.includes('Nunca') || experience.includes('começando')) setDifficultyOffset(-1);
-    if (experience.includes('desafiar') || experience.includes('algum tempo')) setDifficultyOffset(1);
-  }, [experience]);
+    const first = selectNextQuestion(instrument, [], null, difficulty, {});
+    setCurrentQuestion(first);
+  }, [instrument, difficulty]);
 
   const handleAnswer = async (correct: boolean) => {
-    const q = QUESTIONS[current];
-    const newAnswers = { ...answers, [q.id]: correct };
-    setAnswers(newAnswers);
+    if (!currentQuestion) return;
 
-    if (correct) setDifficultyOffset((d) => Math.min(d + 1, 2));
-    else setDifficultyOffset((d) => Math.max(d - 1, -2));
+    const record: AnswerRecord = {
+      questionId: currentQuestion.id,
+      correct,
+      competency: currentQuestion.competency,
+      difficulty: currentQuestion.difficulty,
+    };
+    const newAnswered = [...answered, record];
+    setAnswered(newAnswered);
 
-    if (current < QUESTIONS.length - 1) {
-      setCurrent(current + 1);
+    const newProgress = { ...competencyProgress };
+    if (!newProgress[currentQuestion.competency]) newProgress[currentQuestion.competency] = { correct: 0, total: 0 };
+    newProgress[currentQuestion.competency].total += 1;
+    if (correct) newProgress[currentQuestion.competency].correct += 1;
+    setCompetencyProgress(newProgress);
+
+    const newDiff = correct ? Math.min(5, difficulty + 1) : Math.max(1, difficulty - 1);
+    setDifficulty(newDiff);
+
+    if (newAnswered.length >= 7) {
+      finish(newAnswered);
+      return;
+    }
+
+    const next = selectNextQuestion(
+      instrument,
+      newAnswered.map(a => a.questionId),
+      correct,
+      newDiff,
+      newProgress
+    );
+
+    if (!next) {
+      finish(newAnswered);
     } else {
-      setLoading(true);
-      const scores: Record<string, number> = {};
-      QUESTIONS.forEach((qq) => {
-        scores[qq.competency] = newAnswers[qq.id] ? 80 + Math.random() * 20 : 40 + Math.random() * 30;
-      });
-      const avg = Object.values(scores).reduce((a, b) => a + b, 0) / QUESTIONS.length;
-      const level = avg > 85 ? 'Avançado' : avg > 70 ? 'Intermediário II' : avg > 50 ? 'Intermediário' : 'Iniciante';
-
-      await AsyncStorage.setItem('diagnosisResult', JSON.stringify({ instrument, level, scores, experience }));
-
-      setTimeout(() => {
-        navigation.replace('DiagnosisResult', { instrument, level, scores });
-      }, 1200);
+      setCurrentQuestion(next);
     }
   };
 
-  const q = QUESTIONS[current];
+  const finish = async (finalAnswers: AnswerRecord[]) => {
+    setLoading(true);
+    const result = calculateResult(finalAnswers);
+    const payload = {
+      instrument,
+      experience,
+      ...result,
+      answeredCount: finalAnswers.length,
+      completedAt: new Date().toISOString(),
+    };
+    await AsyncStorage.setItem('diagnosisResult', JSON.stringify(payload));
+    await AsyncStorage.setItem('onboardingComplete', 'true');
+
+    setTimeout(() => {
+      navigation.replace('DiagnosisResult', {
+        instrument,
+        level: result.level,
+        scores: result.scores,
+        strength: result.strength,
+        weakness: result.weakness,
+      });
+    }, 1000);
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={colors.accentPurple} />
+        <Text style={styles.loadingText}>Analisando suas competências...</Text>
+      </View>
+    );
+  }
+
+  if (!currentQuestion) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.loadingText}>Preparando diagnóstico...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>DIAGNÓSTICO ADAPTATIVO</Text>
-        <Text style={styles.progress}>{current + 1} / {QUESTIONS.length}</Text>
+        <Text style={styles.progress}>{answered.length + 1} / ~7</Text>
       </View>
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.accentPurple} />
-          <Text style={styles.loadingText}>Calculando seu ponto de partida...</Text>
+      <View style={styles.body}>
+        <Text style={styles.competency}>{currentQuestion.competency} · Nível {currentQuestion.difficulty}</Text>
+        <Text style={styles.question}>{currentQuestion.text}</Text>
+        <View style={styles.actions}>
+          <TouchableOpacity style={styles.answerBtn} onPress={() => handleAnswer(true)}>
+            <LinearGradient colors={['#00D4FF', '#6B46FF']} style={styles.answerInner}>
+              <Text style={styles.answerText}>Sim / Consigo</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.answerBtn} onPress={() => handleAnswer(false)}>
+            <View style={[styles.answerInner, { backgroundColor: colors.bgCard }]}>
+              <Text style={styles.answerText}>Não / Ainda não</Text>
+            </View>
+          </TouchableOpacity>
         </View>
-      ) : (
-        <View style={styles.body}>
-          <Text style={styles.competency}>{q.competency}</Text>
-          <Text style={styles.question}>{q.text}</Text>
-          <View style={styles.actions}>
-            <TouchableOpacity style={styles.answerBtn} onPress={() => handleAnswer(true)}>
-              <LinearGradient colors={['#00D4FF', '#6B46FF']} style={styles.answerInner}>
-                <Text style={styles.answerText}>Sim / Consigo</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.answerBtn} onPress={() => handleAnswer(false)}>
-              <View style={[styles.answerInner, { backgroundColor: colors.bgCard }]}>
-                <Text style={styles.answerText}>Não / Ainda não</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
+      </View>
     </View>
   );
 }
@@ -102,6 +149,6 @@ const styles = StyleSheet.create({
   answerBtn: { borderRadius: 16, overflow: 'hidden' },
   answerInner: { paddingVertical: 18, alignItems: 'center' },
   answerText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bg },
   loadingText: { color: colors.textSecondary, marginTop: 16 },
 });
