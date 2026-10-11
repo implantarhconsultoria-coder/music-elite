@@ -1,8 +1,17 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ImageBackground } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors } from '../theme/colors';
+import { RootStackParamList } from '../navigation/types';
+import {
+  STORAGE_ACTIVE,
+  STORAGE_STATS,
+  TrainingStats,
+  todayKey,
+} from '../utils/trainingSession';
 
 const HERO = 'https://images.unsplash.com/photo-1588690224648-20426ab6274a?auto=format&fit=crop&w=1200&q=84';
 
@@ -23,20 +32,53 @@ const MENU = [
   { icon: '✦', label: 'Professor' },
 ];
 
+type Nav = NativeStackNavigationProp<RootStackParamList>;
+
 export default function HomeScreen() {
+  const navigation = useNavigation<Nav>();
   const [data, setData] = useState<DiagnosisData>({});
   const [notice, setNotice] = useState<string | null>(null);
+  const [trainingStats, setTrainingStats] = useState<TrainingStats | null>(null);
+  const [hasActiveSession, setHasActiveSession] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const raw = await AsyncStorage.getItem('diagnosisResult');
+      if (raw) setData(JSON.parse(raw));
+    } catch {
+      setData({});
+    }
+    try {
+      const rawStats = await AsyncStorage.getItem(STORAGE_STATS);
+      if (rawStats) {
+        const parsed: TrainingStats = JSON.parse(rawStats);
+        if (parsed.lastTrainingDate !== todayKey()) {
+          parsed.todayCompleted = false;
+        }
+        setTrainingStats(parsed);
+      } else {
+        setTrainingStats(null);
+      }
+    } catch {
+      setTrainingStats(null);
+    }
+    try {
+      const active = await AsyncStorage.getItem(STORAGE_ACTIVE);
+      setHasActiveSession(!!active);
+    } catch {
+      setHasActiveSession(false);
+    }
+  }, []);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const raw = await AsyncStorage.getItem('diagnosisResult');
-        if (raw) setData(JSON.parse(raw));
-      } catch {
-        setData({});
-      }
-    })();
-  }, []);
+    load();
+  }, [load]);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   useEffect(() => {
     if (!notice) return;
@@ -49,7 +91,14 @@ export default function HomeScreen() {
   const index = data.generalIndex ?? 72;
   const strength = data.strength || 'Acordes';
   const weakness = data.weakness || 'Ritmo';
-  const scoreEntries = useMemo(() => Object.entries(data.scores || {}).sort((a, b) => b[1] - a[1]).slice(0, 4), [data.scores]);
+  const scoreEntries = useMemo(
+    () => Object.entries(data.scores || {}).sort((a, b) => b[1] - a[1]).slice(0, 4),
+    [data.scores]
+  );
+
+  const todayDone = trainingStats?.todayCompleted === true;
+  const streakDays = trainingStats?.streak ?? 12;
+  const goTraining = () => navigation.navigate('DailyTraining');
 
   return (
     <View style={styles.container}>
@@ -63,19 +112,39 @@ export default function HomeScreen() {
             <Text style={styles.greeting}>Boa noite, Rodrigo</Text>
             <Text style={styles.levelText}>{instrument} · {level}</Text>
           </View>
-          <View style={styles.streak}><Text style={styles.streakIcon}>🔥</Text><Text style={styles.streakText}>12 dias</Text></View>
+          <View style={styles.streak}>
+            <Text style={styles.streakIcon}>🔥</Text>
+            <Text style={styles.streakText}>{streakDays} dias</Text>
+          </View>
         </View>
 
         <Text style={styles.sectionEyebrow}>TREINO DE HOJE</Text>
-        <TouchableOpacity activeOpacity={0.9} onPress={() => setNotice('Treino guiado entra na próxima etapa funcional.')}>
+        <TouchableOpacity activeOpacity={0.9} onPress={goTraining}>
           <ImageBackground source={{ uri: HERO }} style={styles.hero} imageStyle={styles.heroImage}>
             <LinearGradient colors={['rgba(3,9,19,0.12)', 'rgba(3,9,19,0.45)', 'rgba(3,9,19,0.94)']} style={StyleSheet.absoluteFill} />
             <View style={styles.heroContent}>
-              <View style={styles.livePill}><Text style={styles.liveDot}>●</Text><Text style={styles.liveText}>PLANO ADAPTATIVO</Text></View>
-              <Text style={styles.heroTitle}>Troca de {strength.toLowerCase()} + {weakness.toLowerCase()}</Text>
-              <Text style={styles.heroMeta}>◷ 8 minutos · recomendado para seu diagnóstico</Text>
-              <LinearGradient colors={colors.gradient} style={styles.heroButton}>
-                <Text style={styles.heroButtonText}>COMEÇAR AGORA</Text>
+              <View style={styles.livePill}>
+                <Text style={styles.liveDot}>●</Text>
+                <Text style={styles.liveText}>
+                  {todayDone ? 'CONCLUÍDO HOJE' : hasActiveSession ? 'SESSÃO EM ANDAMENTO' : 'PLANO ADAPTATIVO'}
+                </Text>
+              </View>
+              <Text style={styles.heroTitle}>
+                {todayDone
+                  ? `Treino de ${weakness.toLowerCase()} concluído`
+                  : `Troca de ${strength.toLowerCase()} + ${weakness.toLowerCase()}`}
+              </Text>
+              <Text style={styles.heroMeta}>
+                {todayDone
+                  ? `✓ ${trainingStats?.totalMinutes ?? 0} min acumulados · streak ${streakDays}`
+                  : hasActiveSession
+                    ? '◷ Retomar sessão · progresso salvo'
+                    : '◷ ~7 minutos · recomendado para seu diagnóstico'}
+              </Text>
+              <LinearGradient colors={todayDone ? [colors.success, colors.accentCyan] : colors.gradient} style={styles.heroButton}>
+                <Text style={styles.heroButtonText}>
+                  {todayDone ? 'TREINAR DE NOVO' : hasActiveSession ? 'RETOMAR AGORA' : 'COMEÇAR AGORA'}
+                </Text>
               </LinearGradient>
             </View>
           </ImageBackground>
@@ -83,7 +152,18 @@ export default function HomeScreen() {
 
         <View style={styles.menuRow}>
           {MENU.map((item) => (
-            <TouchableOpacity key={item.label} style={styles.menuItem} onPress={() => setNotice(`${item.label}: módulo preparado para a próxima fase.`)} activeOpacity={0.8}>
+            <TouchableOpacity
+              key={item.label}
+              style={styles.menuItem}
+              onPress={() => {
+                if (item.label === 'Treino') {
+                  goTraining();
+                } else {
+                  setNotice(`${item.label}: módulo preparado para a próxima fase.`);
+                }
+              }}
+              activeOpacity={0.8}
+            >
               <View style={styles.menuIconBox}><Text style={styles.menuIcon}>{item.icon}</Text></View>
               <Text style={styles.menuLabel}>{item.label}</Text>
             </TouchableOpacity>
@@ -140,7 +220,11 @@ export default function HomeScreen() {
           <View style={styles.aiOrb}><Text style={styles.aiOrbText}>✦</Text></View>
           <View style={{ flex: 1 }}>
             <Text style={styles.insightTitle}>Seu próximo ganho rápido</Text>
-            <Text style={styles.insightText}>Você está mais forte em {strength}. O maior avanço agora vem de {weakness}. A trilha vai priorizar isso sem repetir o que você já domina.</Text>
+            <Text style={styles.insightText}>
+              {todayDone
+                ? `Treino de hoje concluído com foco em ${weakness}. Amanhã a trilha continua priorizando o que ainda falta.`
+                : `Você está mais forte em ${strength}. O maior avanço agora vem de ${weakness}. A trilha vai priorizar isso sem repetir o que você já domina.`}
+            </Text>
           </View>
         </View>
       </ScrollView>
@@ -149,9 +233,20 @@ export default function HomeScreen() {
 
       <View style={styles.bottomNav}>
         {[['⌂', 'Início'], ['◇', 'Formação'], ['◎', 'Treinar'], ['♫', 'Repertório'], ['●', 'Perfil']].map(([icon, label], indexNav) => (
-          <TouchableOpacity key={label} style={styles.navItem} onPress={() => indexNav !== 0 && setNotice(`${label}: entra na próxima fase funcional.`)}>
-            <Text style={[styles.navIcon, indexNav === 0 && styles.navActive]}>{icon}</Text>
-            <Text style={[styles.navLabel, indexNav === 0 && styles.navActive]}>{label}</Text>
+          <TouchableOpacity
+            key={label}
+            style={styles.navItem}
+            onPress={() => {
+              if (indexNav === 0) return;
+              if (label === 'Treinar') {
+                goTraining();
+                return;
+              }
+              setNotice(`${label}: entra na próxima fase funcional.`);
+            }}
+          >
+            <Text style={[styles.navIcon, (indexNav === 0 || (label === 'Treinar' && !todayDone)) && styles.navActive]}>{icon}</Text>
+            <Text style={[styles.navLabel, (indexNav === 0 || (label === 'Treinar' && !todayDone)) && styles.navActive]}>{label}</Text>
           </TouchableOpacity>
         ))}
       </View>
