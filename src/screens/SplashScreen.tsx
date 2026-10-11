@@ -16,7 +16,7 @@ export default function SplashScreen({ navigation }: Props) {
       <View style={styles.content}>
         <Text style={styles.logo}>MUSIC</Text>
         <Text style={styles.logoAccent}>ELITE</Text>
-        <Text style={styles.tagline}>APRENDA. PRATIQUE.{\n}DOMINE. COMPROVE.</Text>
+        <Text style={styles.tagline}>APRENDA. PRATIQUE.{'\n'}DOMINE. COMPROVE.</Text>
         <TouchableOpacity style={styles.btn} onPress={() => navigation.navigate('InstrumentSelect')} activeOpacity={0.85}>
           <LinearGradient colors={colors.gradient} style={styles.btnGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
             <Text style={styles.btnText}>COMEÇAR</Text>
