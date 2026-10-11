@@ -52,7 +52,7 @@ export default function InstrumentSelectScreen({ navigation }: Props) {
           </TouchableOpacity>
         )}
       />
-      <Text style={styles.note}>FREE: escolha 1 instrumento{\n}PRO libera todos os instrumentos</Text>
+      <Text style={styles.note}>FREE: escolha 1 instrumento{'\n'}PRO libera todos os instrumentos</Text>
       <TouchableOpacity style={[styles.btn, !selected && styles.btnDisabled]} onPress={onContinue} disabled={!selected}>
         <LinearGradient colors={selected ? colors.gradient : ['#333', '#222']} style={styles.btnInner}>
           <Text style={styles.btnText}>CONTINUAR</Text>
