@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'rea
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { colors } from '../theme/colors';
-import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { selectNextQuestion, calculateResult, getStartingDifficulty, Question } from '../utils/diagnosisEngine';
 
@@ -24,56 +23,69 @@ export default function DiagnosisScreen({ navigation, route }: Props) {
   const [difficulty, setDifficulty] = useState(() => getStartingDifficulty(experience));
   const [competencyProgress, setCompetencyProgress] = useState<Record<string, { correct: number; total: number }>>({});
   const initialized = useRef(false);
+  const answerLock = useRef(false);
 
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
     const first = selectNextQuestion(instrument, [], null, difficulty, {});
     setCurrentQuestion(first);
-  }, [instrument]);
+  }, [difficulty, instrument]);
 
   const handleSelectOption = async (optionIndex: number) => {
-    if (!currentQuestion || loading) return;
+    if (!currentQuestion || loading || answerLock.current) return;
+    answerLock.current = true;
 
-    const correct = optionIndex === currentQuestion.correctIndex;
-    const record: AnswerRecord = {
-      questionId: currentQuestion.id,
-      correct,
-      competency: currentQuestion.competency,
-      difficulty: currentQuestion.difficulty,
-    };
+    try {
+      const correct = optionIndex === currentQuestion.correctIndex;
+      const record: AnswerRecord = {
+        questionId: currentQuestion.id,
+        correct,
+        competency: currentQuestion.competency,
+        difficulty: currentQuestion.difficulty,
+      };
 
-    const newAnswered = [...answered, record];
-    setAnswered(newAnswered);
+      const newAnswered = [...answered, record];
+      setAnswered(newAnswered);
 
-    const newProgress = { ...competencyProgress };
-    if (!newProgress[currentQuestion.competency]) {
-      newProgress[currentQuestion.competency] = { correct: 0, total: 0 };
-    }
-    newProgress[currentQuestion.competency].total += 1;
-    if (correct) newProgress[currentQuestion.competency].correct += 1;
-    setCompetencyProgress(newProgress);
+      const currentCompetency = competencyProgress[currentQuestion.competency] ?? { correct: 0, total: 0 };
+      const newProgress = {
+        ...competencyProgress,
+        [currentQuestion.competency]: {
+          correct: currentCompetency.correct + (correct ? 1 : 0),
+          total: currentCompetency.total + 1,
+        },
+      };
+      setCompetencyProgress(newProgress);
 
-    const newDiff = correct ? Math.min(5, difficulty + 1) : Math.max(1, difficulty - 1);
-    setDifficulty(newDiff);
+      // A dificuldade sobe/desce exatamente um nível por resposta.
+      // O engine recebe lastCorrect=null para não aplicar o ajuste uma segunda vez.
+      const nextDifficulty = correct ? Math.min(5, difficulty + 1) : Math.max(1, difficulty - 1);
+      setDifficulty(nextDifficulty);
 
-    if (newAnswered.length >= 7) {
-      await finish(newAnswered);
-      return;
-    }
+      if (newAnswered.length >= 7) {
+        await finish(newAnswered);
+        return;
+      }
 
-    const next = selectNextQuestion(
-      instrument,
-      newAnswered.map(a => a.questionId),
-      correct,
-      newDiff,
-      newProgress
-    );
+      const next = selectNextQuestion(
+        instrument,
+        newAnswered.map(a => a.questionId),
+        null,
+        nextDifficulty,
+        newProgress
+      );
 
-    if (!next) {
-      await finish(newAnswered);
-    } else {
+      if (!next) {
+        await finish(newAnswered);
+        return;
+      }
+
       setCurrentQuestion(next);
+      answerLock.current = false;
+    } catch (error) {
+      console.warn('Falha ao processar resposta do diagnóstico:', error);
+      answerLock.current = false;
     }
   };
 
@@ -87,19 +99,25 @@ export default function DiagnosisScreen({ navigation, route }: Props) {
       answeredCount: finalAnswers.length,
       completedAt: new Date().toISOString(),
     };
-    await AsyncStorage.setItem('diagnosisResult', JSON.stringify(payload));
-    await AsyncStorage.setItem('onboardingComplete', 'true');
 
-    setTimeout(() => {
-      navigation.replace('DiagnosisResult', {
-        instrument,
-        level: result.level,
-        scores: result.scores,
-        strength: result.strength,
-        weakness: result.weakness,
-        generalIndex: result.generalIndex,
-      });
-    }, 1200);
+    try {
+      await AsyncStorage.multiSet([
+        ['diagnosisResult', JSON.stringify(payload)],
+        ['onboardingComplete', 'true'],
+      ]);
+    } catch (error) {
+      // Persistência não pode impedir o usuário de concluir o diagnóstico.
+      console.warn('Falha ao persistir diagnóstico localmente:', error);
+    }
+
+    navigation.replace('DiagnosisResult', {
+      instrument,
+      level: result.level,
+      scores: result.scores,
+      strength: result.strength,
+      weakness: result.weakness,
+      generalIndex: result.generalIndex,
+    });
   };
 
   if (loading) {
@@ -131,7 +149,7 @@ export default function DiagnosisScreen({ navigation, route }: Props) {
         <View style={styles.options}>
           {currentQuestion.options.map((opt, idx) => (
             <TouchableOpacity
-              key={idx}
+              key={`${currentQuestion.id}-${idx}`}
               style={styles.optionBtn}
               onPress={() => handleSelectOption(idx)}
               activeOpacity={0.8}
