@@ -14,6 +14,7 @@ export type RootStackParamList = {
     generalIndex: number;
   };
   Home: undefined;
+  DailyTraining: undefined;
 };
 
 export const Stack = createNativeStackNavigator<RootStackParamList>();
