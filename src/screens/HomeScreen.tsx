@@ -60,6 +60,10 @@ export default function HomeScreen({ navigation }: Props) {
       navigation.navigate('Lessons');
       return;
     }
+    if (label === 'Repertório') {
+      navigation.navigate('Repertoire');
+      return;
+    }
     setNotice(`${label}: módulo preparado para a próxima fase.`);
   };
 
@@ -67,6 +71,10 @@ export default function HomeScreen({ navigation }: Props) {
     if (index === 0) return;
     if (label === 'Formação') {
       navigation.navigate('Lessons');
+      return;
+    }
+    if (label === 'Repertório') {
+      navigation.navigate('Repertoire');
       return;
     }
     setNotice(`${label}: entra na próxima fase funcional.`);
