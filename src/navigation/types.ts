@@ -14,6 +14,8 @@ export type RootStackParamList = {
     generalIndex: number;
   };
   Home: undefined;
+  Lessons: undefined;
+  LessonDetail: { lessonId: string };
 };
 
 export const Stack = createNativeStackNavigator<RootStackParamList>();
