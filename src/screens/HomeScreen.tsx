@@ -2,7 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ImageBackground } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { colors } from '../theme/colors';
+import { RootStackParamList } from '../navigation/types';
+
+type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
 const HERO = 'https://images.unsplash.com/photo-1588690224648-20426ab6274a?auto=format&fit=crop&w=1200&q=84';
 
@@ -23,7 +27,7 @@ const MENU = [
   { icon: '✦', label: 'Professor' },
 ];
 
-export default function HomeScreen() {
+export default function HomeScreen({ navigation }: Props) {
   const [data, setData] = useState<DiagnosisData>({});
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -50,6 +54,23 @@ export default function HomeScreen() {
   const strength = data.strength || 'Acordes';
   const weakness = data.weakness || 'Ritmo';
   const scoreEntries = useMemo(() => Object.entries(data.scores || {}).sort((a, b) => b[1] - a[1]).slice(0, 4), [data.scores]);
+
+  const onMenuPress = (label: string) => {
+    if (label === 'Aulas') {
+      navigation.navigate('Lessons');
+      return;
+    }
+    setNotice(`${label}: módulo preparado para a próxima fase.`);
+  };
+
+  const onNavPress = (label: string, index: number) => {
+    if (index === 0) return;
+    if (label === 'Formação') {
+      navigation.navigate('Lessons');
+      return;
+    }
+    setNotice(`${label}: entra na próxima fase funcional.`);
+  };
 
   return (
     <View style={styles.container}>
@@ -83,7 +104,7 @@ export default function HomeScreen() {
 
         <View style={styles.menuRow}>
           {MENU.map((item) => (
-            <TouchableOpacity key={item.label} style={styles.menuItem} onPress={() => setNotice(`${item.label}: módulo preparado para a próxima fase.`)} activeOpacity={0.8}>
+            <TouchableOpacity key={item.label} style={styles.menuItem} onPress={() => onMenuPress(item.label)} activeOpacity={0.8}>
               <View style={styles.menuIconBox}><Text style={styles.menuIcon}>{item.icon}</Text></View>
               <Text style={styles.menuLabel}>{item.label}</Text>
             </TouchableOpacity>
@@ -149,7 +170,7 @@ export default function HomeScreen() {
 
       <View style={styles.bottomNav}>
         {[['⌂', 'Início'], ['◇', 'Formação'], ['◎', 'Treinar'], ['♫', 'Repertório'], ['●', 'Perfil']].map(([icon, label], indexNav) => (
-          <TouchableOpacity key={label} style={styles.navItem} onPress={() => indexNav !== 0 && setNotice(`${label}: entra na próxima fase funcional.`)}>
+          <TouchableOpacity key={label} style={styles.navItem} onPress={() => onNavPress(label, indexNav)}>
             <Text style={[styles.navIcon, indexNav === 0 && styles.navActive]}>{icon}</Text>
             <Text style={[styles.navLabel, indexNav === 0 && styles.navActive]}>{label}</Text>
           </TouchableOpacity>
