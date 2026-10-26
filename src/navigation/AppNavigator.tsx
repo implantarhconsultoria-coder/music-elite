@@ -8,6 +8,8 @@ import ExperienceAssessmentScreen from '../screens/ExperienceAssessmentScreen';
 import DiagnosisScreen from '../screens/DiagnosisScreen';
 import DiagnosisResultScreen from '../screens/DiagnosisResultScreen';
 import HomeScreen from '../screens/HomeScreen';
+import LessonsScreen from '../screens/LessonsScreen';
+import LessonDetailScreen from '../screens/LessonDetailScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../theme/colors';
 
@@ -58,6 +60,8 @@ export default function AppNavigator() {
         <Stack.Screen name="Diagnosis" component={DiagnosisScreen} />
         <Stack.Screen name="DiagnosisResult" component={DiagnosisResultScreen} />
         <Stack.Screen name="Home" component={HomeScreen} />
+        <Stack.Screen name="Lessons" component={LessonsScreen} />
+        <Stack.Screen name="LessonDetail" component={LessonDetailScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
