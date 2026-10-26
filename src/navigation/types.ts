@@ -16,6 +16,8 @@ export type RootStackParamList = {
   Home: undefined;
   Lessons: undefined;
   LessonDetail: { lessonId: string };
+  Repertoire: undefined;
+  SongDetail: { songId: string };
 };
 
 export const Stack = createNativeStackNavigator<RootStackParamList>();
